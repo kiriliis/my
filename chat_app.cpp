@@ -1,52 +1,76 @@
 #if defined(UNICODE)
-#undef UNICODE // юникод не используем
+#undef UNICODE // СЋРЅРёРєРѕРґ РЅРµ РёСЃРїРѕР»СЊР·СѓРµРј
 #endif
 
+#include <Windowsx.h>
 #include <windows.h>
 #include <commctrl.h>
 #include <objbase.h>
 #include <stdio.h>
 
-// отключить некоторые предупреждения
+// РѕС‚РєР»СЋС‡РёС‚СЊ РЅРµРєРѕС‚РѕСЂС‹Рµ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ
 #pragma warning(disable : 4996)
 #pragma warning(disable : 4018)
 
-// размеры окна по умолчанию
-#define MAIN_WIDTH	480
-#define MAIN_HEIGHT	320
-#define TOP	10
-#define LEFT 10
-#define PADDING 10
+// СЂР°Р·РјРµСЂС‹ РѕРєРЅР° РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
+#define MAIN_WIDTH		480
+#define MAIN_HEIGHT		320
+#define TOP				10
+#define LEFT			10
+#define PADDING			10
+#define LABEL_WIDTH		50
+#define LABEL_HEIGHT	20
+#define TEXT_WIDTH		200
+#define TEXT_HEIGHT		20
 
-#define STR_NEW "новое сообщение"
-#define BUT_NEW_ICO "res//new.ico"
-#define BUT_NEW	1001
-#define STR_EDIT "редактировать сообщение"
-#define BUT_EDIT_ICO "res//edit.ico"
-#define BUT_EDIT 1002
-#define STR_DELETE "удалить сообщение"
-#define BUT_DELETE_ICO "res//delete.ico"
-#define BUT_DELETE 1003
-#define STR_CLEAR "очистить сообщения"
-#define BUT_CLEAR_ICO "res//clear.ico"
-#define BUT_CLEAR 1004
+#define STR_IN			"РІС…РѕРґ РІ С‡Р°С‚"
+#define BUT_IN_ICO		"res//in.ico"
+#define BUT_IN			1001
+#define STR_OUT		"РІС‹С…РѕРґ РёР· С‡Р°С‚Р°"
+#define BUT_OUT_ICO	"res//out.ico"
+#define BUT_OUT		1002
+#define STR_EXIT		"Р·Р°РІРµСЂС€РёС‚СЊ СЂР°Р±РѕС‚Сѓ"
+#define BUT_EXIT_ICO	"res//exit.ico"
+#define BUT_EXIT		1003
+#define STR_CLEAR		"РѕС‡РёСЃС‚РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёСЏ"
+#define BUT_CLEAR_ICO	"res//clear.ico"
+#define BUT_CLEAR		1004
+#define STR_MSG			"РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ"
+#define BUT_MSG_ICO		"res//msg.ico"
+#define BUT_MSG			1012
 
-#define LIST_USERS	1005
-#define LIST_MSGS	1006
+#define BUT_NIKE		1009
+#define BUT_AVATARE		1010
 
-#define BUT_WIDTH	40
-#define BUT_HEIGHT	40
+
+#define LIST_USERS		1005
+#define LIST_MSGS		1006
+
+#define TXT_NIKE		1007
+#define TXT_AVATARE		1008
+
+
+
+#define TXT_MSG			1011
+
+#define BUT_WIDTH		40
+#define BUT_HEIGHT		40
 
 #define LIST_WIDTH	MAIN_WIDTH / 2 
 #define LIST_HEIGHT	MAIN_HEIGHT - 4*TOP
+#define LIST_USERS_ITEM_HEIGHT	40
 
 #define CLASS_NAME		"TextChat"
 #define STR_EMPTY		""
-#define STR_TITLE		"Текстовый чат"
-// файл настроек
+#define STR_TITLE		"РўРµРєСЃС‚РѕРІС‹Р№ С‡Р°С‚"
+#define STR_NIKE		"РЅРёРє"
+#define STR_AVATARE		"Р°РІР°С‚Р°СЂ"
+#define STR_DOTS		"..."
+
+// С„Р°Р№Р» РЅР°СЃС‚СЂРѕРµРє
 #define CONF_NAME		"res\\chat_app.ini"
 
-// настройки программы
+// РЅР°СЃС‚СЂРѕР№РєРё РїСЂРѕРіСЂР°РјРјС‹
 typedef struct tagAppSettings{
 	int main_x;
 	int main_y;
@@ -55,44 +79,55 @@ typedef struct tagAppSettings{
 }APP_SETTINGS, *pAPP_SETTINGS, **ppAPP_SETTINGS;
 
 
-// глобальные переменные
+// РіР»РѕР±Р°Р»СЊРЅС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ
 HINSTANCE hInst;
 HWND hwnd;
-HWND hWndBut_New;
-HWND hWndBut_Edit;
-HWND hWndBut_Delete;
+HWND hWndBut_In;
+HWND hWndBut_Out;
+HWND hWndBut_Exit;
 HWND hWndBut_Clear;
 HWND hWnd_Users;
 HWND hWnd_Messages;
+HWND hWnd_Nike;
+HWND hWnd_Avatare;
+HWND hWnd_Msg;
+HWND hWnd_ButMsg;
 
 char	szClassName[]	= {CLASS_NAME};
 char	szWndName[]		= {STR_TITLE};
-pAPP_SETTINGS pcs	= NULL; // настройки программы
+pAPP_SETTINGS pcs	= NULL; // РЅР°СЃС‚СЂРѕР№РєРё РїСЂРѕРіСЂР°РјРјС‹
+char nike_buf[1024]; // РЅРёРє РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
 
-// определения функций
+// РѕРїСЂРµРґРµР»РµРЅРёСЏ С„СѓРЅРєС†РёР№
 BOOL InitMainWindow(HINSTANCE hInstance);
 HWND CreateButIcon(HWND, INT, INT, INT, INT, PCHAR, INT, LPTSTR, HWND *);
 HWND CreateListBox(HWND, INT, INT, INT, INT, PCHAR, INT);
+HWND CreateLabel(HWND, INT, INT, INT, INT, PCHAR);
+HWND CreateText(HWND, INT, INT, INT, INT, PCHAR, INT);
+HWND CreateMultiRowText(HWND, INT, INT, INT, INT, PCHAR, INT);
+HWND CreateBut(HWND, INT, INT, INT, INT, PCHAR, INT);
+void DrawItem(HWND hWndParent, LPDRAWITEMSTRUCT lpDrawItem);
+void SelectAvatareFile();
 
-//---------------------------  код для работы с файлом настроек программы ------------------------
-#define MAIN_WINDOW "главное окно"
-#define MAIN_WINDOW_X "левый верхний угол x"
-#define MAIN_WINDOW_Y "левый верхний угол y"
-#define MAIN_WINDOW_WIDTH	"ширина"
-#define MAIN_WINDOW_HEIGHT "высота"
+//---------------------------  РєРѕРґ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ С„Р°Р№Р»РѕРј РЅР°СЃС‚СЂРѕРµРє РїСЂРѕРіСЂР°РјРјС‹ ------------------------
+#define MAIN_WINDOW "РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ"
+#define MAIN_WINDOW_X "Р»РµРІС‹Р№ РІРµСЂС…РЅРёР№ СѓРіРѕР» x"
+#define MAIN_WINDOW_Y "Р»РµРІС‹Р№ РІРµСЂС…РЅРёР№ СѓРіРѕР» y"
+#define MAIN_WINDOW_WIDTH	"С€РёСЂРёРЅР°"
+#define MAIN_WINDOW_HEIGHT "РІС‹СЃРѕС‚Р°"
 
 HANDLE OpenConfigFile(LPTSTR env_buf, DWORD dwSize){
 	HANDLE fh = INVALID_HANDLE_VALUE;
 	
 	CopyMemory(env_buf, CONF_NAME, lstrlen(CONF_NAME));
 	env_buf[lstrlen(CONF_NAME)] = '\x0';
-	// пробуем открыть файл настроек в каталоге res		
+	// РїСЂРѕР±СѓРµРј РѕС‚РєСЂС‹С‚СЊ С„Р°Р№Р» РЅР°СЃС‚СЂРѕРµРє РІ РєР°С‚Р°Р»РѕРіРµ res		
 	fh = CreateFile((LPCSTR)env_buf, GENERIC_READ | GENERIC_WRITE,0,NULL,OPEN_ALWAYS,0,NULL);	
 
 	return fh;
 }
 
-// читает настройки программы
+// С‡РёС‚Р°РµС‚ РЅР°СЃС‚СЂРѕР№РєРё РїСЂРѕРіСЂР°РјРјС‹
 int ReadSettings(pAPP_SETTINGS ps){
 	HANDLE f_conf;
 	LPTSTR env_buf;
@@ -124,7 +159,7 @@ int ReadSettings(pAPP_SETTINGS ps){
 
 	return 0;
 }
-// записывает настройки программы
+// Р·Р°РїРёСЃС‹РІР°РµС‚ РЅР°СЃС‚СЂРѕР№РєРё РїСЂРѕРіСЂР°РјРјС‹
 int WriteSettings(pAPP_SETTINGS ps){
 	HANDLE f_conf;
 	LPTSTR env_buf;
@@ -167,6 +202,7 @@ int WINAPI WinMain (HINSTANCE hInstance,HINSTANCE hPrevInstance,char * szCmdLine
 {
 	MSG         msg ;
 
+	ZeroMemory(nike_buf, 1024);
 	if(! InitMainWindow(hInstance) ) goto exit;
 
 	for(;;)
@@ -182,14 +218,14 @@ int WINAPI WinMain (HINSTANCE hInstance,HINSTANCE hPrevInstance,char * szCmdLine
 
         WaitMessage();
     }
-	// запись настроек программы
+	// Р·Р°РїРёСЃСЊ РЅР°СЃС‚СЂРѕРµРє РїСЂРѕРіСЂР°РјРјС‹
 	WriteSettings(pcs);
 exit:
 	if(pcs != NULL )LocalFree(pcs);
     return ((int) msg.wParam);
 }
 
-// при изменении размера окна
+// РїСЂРё РёР·РјРµРЅРµРЅРёРё СЂР°Р·РјРµСЂР° РѕРєРЅР°
 void ResizeUI(HWND hwnd){
 	RECT rc;
 
@@ -213,44 +249,209 @@ void ResizeUI(HWND hwnd){
 						pcs->main_h - TOP - BUT_HEIGHT*2, 
 						SWP_DRAWFRAME);
 
+	SetWindowPos(hWnd_Msg, HWND_TOP,
+						LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH+BUT_WIDTH/2+PADDING, 
+						TOP, 
+						pcs->main_w - LIST_WIDTH - LEFT*3 - PADDING - TEXT_WIDTH - BUT_WIDTH / 2 * 3, 
+						TEXT_HEIGHT*2, 
+						SWP_DRAWFRAME);
+
+	SetWindowPos(hWnd_ButMsg, HWND_TOP,
+						LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH+BUT_WIDTH/2+PADDING+
+						(pcs->main_w - LIST_WIDTH - LEFT*3 - PADDING - TEXT_WIDTH - BUT_WIDTH / 2 * 3), 
+						TOP, 
+						BUT_WIDTH, 
+						BUT_HEIGHT, 
+						SWP_DRAWFRAME);
+	
+
 
 }
 
 
+
+void DrawBitmaps(HDC hDC, RECT rect)
+{
+
+    HDC memdc, memdc1;
+    memdc=CreateCompatibleDC(hDC);
+    memdc1=CreateCompatibleDC(hDC);
+
+    HBITMAP bitmap,bitmap1, oldbitmap, oldbitmap1;
+
+//    bitmap=LoadBitmap(AfxGetInstanceHandle(),MAKEINTRESOURCE(IDB_REDX));
+//    bitmap1=LoadBitmap(AfxGetInstanceHandle(),MAKEINTRESOURCE(IDB_REDXMASK));
+
+    oldbitmap=(HBITMAP)SelectObject(memdc,bitmap);
+    oldbitmap1=(HBITMAP)SelectObject(memdc1,bitmap1);
+
+    //draw the bitmap
+    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc,0,0,SRCINVERT);
+    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc1,0,0,SRCAND);
+    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc,0,0,SRCINVERT);
+
+    //cleanup
+    SelectObject(memdc,oldbitmap);
+    SelectObject(memdc1,oldbitmap1);
+}
+
+
+BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
+	if (Item->itemID == -1){
+		return FALSE;
+	}
+
+	HDC dc = Item->hDC;
+    
+	SetBkColor(Item->hDC, 0xFFFFFF);
+    FillRect(Item->hDC, &Item->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    SetTextColor(Item->hDC, 0x000000);
+    //if (Item->itemState == ODS_SELECTED)
+        
+    int len = SendMessage(Item->hwndItem , LB_GETTEXTLEN, Item->itemID, 0);
+    if (len > 0)
+    {
+        LPTSTR lpBuff = new TCHAR[len+1];
+        len = SendMessage(Item->hwndItem , LB_GETTEXT, Item->itemID, (LPARAM)lpBuff);
+        if (len > 0)
+            TextOut(Item->hDC, Item->rcItem.left, Item->rcItem.top, lpBuff, len);
+        delete[] lpBuff;
+    }
+    
+	//draw the bitmap
+    //DrawBitmaps(dc, Item->rcItem);
+
+    if (Item->itemState & ODS_FOCUS)
+    {
+        DrawFocusRect(Item->hDC, &Item->rcItem);
+    }
+
+    return TRUE;
+}
+
+// СѓСЃС‚Р°РЅРѕРІРєР° РёРјРµРЅРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+void SetNike(){
+	char buf[2048];	
+
+	SendMessage(hWnd_Nike, WM_GETTEXT, (WPARAM)1023, (LPARAM)nike_buf);
+
+	sprintf(buf, "%s (%s)", STR_TITLE, nike_buf);
+
+	SendMessage(hwnd, WM_SETTEXT, 0, (LPARAM)buf);
+}
+
+// РѕС‚РїСЂР°РІРєР° СЃРѕРѕР±С‰РµРЅРёСЏ
+void SendTextMessage(){
+	SYSTEMTIME st;
+	char buffer[2048]; // Р±СѓС„РµСЂ РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ
+	int pos;
+
+	ZeroMemory(buffer, 2048);
+
+	GetLocalTime(&st);
+	sprintf(buffer, "[%02d.%02d.%04d_%02d:%02d:%02d] (%s)", st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, nike_buf);
+	pos = lstrlen(buffer);
+	buffer[pos] = ' ';
+	// РїРѕР»СѓС‡РёС‚СЊ С‚РµРєСЃС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РІ Р±СѓС„РµСЂ
+	SendMessage(hWnd_Msg, WM_GETTEXT, (WPARAM)2047-pos-2, (LPARAM)&buffer[pos+1]);
+	// РІСЂРµРјСЏ РїСЂРёС…РѕРґР° СЃРѕРѕР±С‰РµРЅРёСЏ
+	// РґРѕР±Р°РІС‚СЊ С‚РµРєСЃС‚ РІ СЃРїРёСЃРѕРє СЃРѕРѕР±С‰РµРЅРёР№
+	// СЌС‚Рѕ РїРѕРєР° С‚Р°Рє СЂР°Р±РѕС‚Р°РµС‚, РІ РґР°Р»СЊРЅРµР№С€РµРј СЃРѕРѕР±С‰РµРЅРёРµ Р±СѓРґРµС‚ РѕС‚РїСЂР°РІР»СЏС‚СЊСЃСЏ РІ СЃРµС‚СЊ
+	// Рё РІ СЃРїРёСЃРѕРє РїРѕРїР°РґР°С‚СЊ РёР· СЃРµС‚Рё
+	SendMessage(hWnd_Messages, LB_INSERTSTRING, 0, (LPARAM)buffer);
+}
+
 LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
+	
+	LPDRAWITEMSTRUCT Item;
 	switch (iMsg)
 	{
-		case WM_CREATE :
+		case WM_CREATE : // СЃРѕР·РґР°СЋС‚СЃСЏ СЌР»РµРјРµРЅС‚С‹ РіСЂР°С„РёС‡РµСЃРєРѕРіРѕ РёРЅС‚РµСЂС„РµР№СЃР°
 
-			hWndBut_New = CreateButIcon(hwnd,
+			hWndBut_In = CreateButIcon(hwnd,
 									LEFT, TOP,
 									BUT_WIDTH,BUT_HEIGHT,
-									(PCHAR)STR_NEW, BUT_NEW, (LPTSTR)BUT_NEW_ICO, NULL);
-			hWndBut_Edit = CreateButIcon(hwnd,
+									(PCHAR)STR_IN, BUT_IN, (LPTSTR)BUT_IN_ICO, NULL);
+			hWndBut_Out = CreateButIcon(hwnd,
 									LEFT+BUT_WIDTH, TOP,
 									BUT_WIDTH,BUT_HEIGHT,
-									(PCHAR)STR_EDIT, BUT_EDIT, (LPTSTR)BUT_EDIT_ICO, NULL);
-			hWndBut_Delete = CreateButIcon(hwnd,
+									(PCHAR)STR_OUT, BUT_OUT, (LPTSTR)BUT_OUT_ICO, NULL);
+			hWndBut_Exit = CreateButIcon(hwnd,
 									LEFT+BUT_WIDTH*2, TOP,
 									BUT_WIDTH,BUT_HEIGHT,
-									(PCHAR)STR_DELETE, BUT_DELETE, (LPTSTR)BUT_DELETE_ICO, NULL);
+									(PCHAR)STR_EXIT, BUT_EXIT, (LPTSTR)BUT_EXIT_ICO, NULL);
 			hWndBut_Clear = CreateButIcon(hwnd,
 									LEFT+BUT_WIDTH*3, TOP,
 									BUT_WIDTH,BUT_HEIGHT,
 									(PCHAR)STR_CLEAR, BUT_CLEAR, (LPTSTR)BUT_CLEAR_ICO, NULL);
 			hWnd_Users = CreateListBox(hwnd, LEFT, TOP*2 + BUT_HEIGHT, LIST_WIDTH, LIST_HEIGHT, STR_EMPTY, LIST_USERS);
 			hWnd_Messages = CreateListBox(hwnd, LEFT+LIST_WIDTH+PADDING, TOP*2 + BUT_HEIGHT, LIST_WIDTH, LIST_HEIGHT, STR_EMPTY, LIST_MSGS);
+
+			CreateLabel(hwnd, LEFT+BUT_WIDTH*4+PADDING, TOP, LABEL_WIDTH, LABEL_HEIGHT, STR_NIKE);
+			hWnd_Nike = CreateText(hwnd, LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING, TOP, TEXT_WIDTH, TEXT_HEIGHT, STR_EMPTY, TXT_NIKE);
+			CreateBut(hwnd, LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH, TOP, BUT_WIDTH/2,BUT_HEIGHT/2, (PCHAR)STR_DOTS, BUT_NIKE);
+
+			CreateLabel(hwnd, LEFT+BUT_WIDTH*4+PADDING, TOP+LABEL_HEIGHT, LABEL_WIDTH, LABEL_HEIGHT, STR_AVATARE);
+			hWnd_Avatare = CreateText(hwnd, LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING, TOP+TEXT_HEIGHT, TEXT_WIDTH, TEXT_HEIGHT, STR_EMPTY, TXT_AVATARE);
+			CreateBut(hwnd, LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH, TOP+BUT_HEIGHT/2, BUT_WIDTH/2,BUT_HEIGHT/2, (PCHAR)STR_DOTS, BUT_AVATARE);
+
+			hWnd_Msg = CreateMultiRowText(hwnd, LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH+BUT_WIDTH/2+PADDING, TOP, TEXT_WIDTH, TEXT_HEIGHT*2, STR_EMPTY, TXT_MSG);
+
+			hWnd_ButMsg = CreateButIcon(hwnd, 
+				LEFT+BUT_WIDTH*4+PADDING+LABEL_WIDTH+PADDING+TEXT_WIDTH+BUT_WIDTH/2+PADDING+TEXT_WIDTH, 
+				TOP, 
+				BUT_WIDTH, 
+				BUT_HEIGHT, 
+				(PCHAR)STR_MSG,
+				BUT_MSG, BUT_MSG_ICO, NULL );
 			
 			break;
-		case WM_SIZE:
+		case WM_SIZE :// РїСЂРё РёР·РјРµРЅРµРЅРёРё СЂР°Р·РјРµСЂР° РѕРєРЅР°
 			ResizeUI(hwnd);
 			break;
 		case WM_DESTROY :
-
-                PostQuitMessage (0) ;
-                break;
-
+            PostQuitMessage (0) ;
+            break;
+		case WM_COMMAND :// РѕР±СЂР°Р±РѕС‚С‡РёРєРё РєРѕРјР°РЅРґ
+			switch( LOWORD(wParam)) // РµСЃР»Рё РЅР°Р¶Р°С‚Р° РєР°РєР°СЏ-С‚Рѕ РєРЅРѕРїРєР°
+            {
+			case BUT_MSG: // РєРЅРѕРїРєР° РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ
+				SendTextMessage();
+				break;
+			case BUT_NIKE:
+				SetNike();
+				break;
+			case BUT_AVATARE:
+				SelectAvatareFile();
+				break;
+			case BUT_CLEAR: // РѕС‡РёСЃС‚РёС‚СЊ СЃРїРёСЃРѕРє СЃРѕРѕР±С‰РµРЅРёР№
+				SendMessage(hWnd_Messages, LB_RESETCONTENT, 0, 0);
+				break;
+			case BUT_EXIT:
+				PostMessage(hwnd, WM_CLOSE, 0, 0);
+				break;
+			default:
+				break;
+			}
+			break;
+		case WM_DRAWITEM: // РїСЂРѕСЂРёСЃРѕРІРєР° СЃС‚СЂРѕРєРё СЃРїРёСЃРєР°
+			Item = (LPDRAWITEMSTRUCT)lParam;
+            if (Item->CtlID == LIST_MSGS) // РµСЃРѕРё СЃРїРёСЃРѕРє СЃРѕРѕР±С‰РµРЅРёР№
+            {
+                DrawUserItem(Item);
+            }
+			break;
+		case WM_MEASUREITEM: 
+        {
+            MEASUREITEMSTRUCT *mis = (MEASUREITEMSTRUCT*) lParam;
+            if (mis->CtlID == LIST_USERS) // РґР»СЏ СЃРїРёСЃРєР° РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ Р±РѕР»РµРµ С€РёСЂРѕРєР°СЏ СЃС‚СЂРѕРєР°
+            {
+                mis->itemHeight = LIST_USERS_ITEM_HEIGHT;
+                return TRUE;
+            }
+            break;
+        }
 		default:
 
 			break;
@@ -260,27 +461,27 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 
 }
 
-// инициализация главного окна приложения
+// РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РіР»Р°РІРЅРѕРіРѕ РѕРєРЅР° РїСЂРёР»РѕР¶РµРЅРёСЏ
 BOOL InitMainWindow(HINSTANCE hInstance){
 	WNDCLASS    wc;
 	static LPCTSTR lpszAppName = (LPCSTR)"MAINICO";
-	// выделяется память для настроек программы
+	// РІС‹РґРµР»СЏРµС‚СЃСЏ РїР°РјСЏС‚СЊ РґР»СЏ РЅР°СЃС‚СЂРѕРµРє РїСЂРѕРіСЂР°РјРјС‹
 	pcs = (pAPP_SETTINGS)LocalAlloc(LPTR, sizeof(APP_SETTINGS));
-	// если не удалось выделить, то выход
+	// РµСЃР»Рё РЅРµ СѓРґР°Р»РѕСЃСЊ РІС‹РґРµР»РёС‚СЊ, С‚Рѕ РІС‹С…РѕРґ
 	if(pcs == NULL){
 		return FALSE;
 	}
-	// читаются настройки программы
+	// С‡РёС‚Р°СЋС‚СЃСЏ РЅР°СЃС‚СЂРѕР№РєРё РїСЂРѕРіСЂР°РјРјС‹
 	ReadSettings(pcs);
 
-	// инициализация структуры для создания окна
+	// РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЃС‚СЂСѓРєС‚СѓСЂС‹ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РѕРєРЅР°
 	hInst = hInstance;
 	wc.style = 0;
 	wc.lpfnWndProc = WndProc;
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = 0;
 	wc.hInstance = hInstance;
-	wc.hIcon = NULL;//(HICON)LoadImage(0, (LPCSTR)MAIN_ICO, IMAGE_ICON,0,0,LR_LOADFROMFILE);//LoadIcon(hInstance, lpszAppName);	 
+	wc.hIcon = NULL;
 	wc.hCursor = LoadCursor (NULL, IDC_ARROW);
 	wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
 	wc.lpszMenuName = NULL;
@@ -291,10 +492,10 @@ BOOL InitMainWindow(HINSTANCE hInstance){
     ZeroMemory(&dm, sizeof(dm));
     dm.dmSize = sizeof(dm);
 
-	// определяютс яразмеры экрана
+	// РѕРїСЂРµРґРµР»СЏСЋС‚СЃ СЏСЂР°Р·РјРµСЂС‹ СЌРєСЂР°РЅР°
     EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &dm);
 
-	// установка размеров окна по умолчанию
+	// СѓСЃС‚Р°РЅРѕРІРєР° СЂР°Р·РјРµСЂРѕРІ РѕРєРЅР° РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 	if(pcs->main_w == 0){
 		pcs->main_w = MAIN_WIDTH;
 	}
@@ -321,16 +522,15 @@ BOOL InitMainWindow(HINSTANCE hInstance){
 }
 
 //---------------------------------------------------------------------------------------
-// элементы интерфейса пользователя
+// СЌР»РµРјРµРЅС‚С‹ РёРЅС‚РµСЂС„РµР№СЃР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
 
-// список
+// СЃРїРёСЃРѕРє
 HWND CreateListBox(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd )
 {
     HWND ww;
 
     ww = CreateWindow( (LPCSTR)"LISTBOX", (LPCSTR)name, 
-		WS_CHILD | WS_VISIBLE| WS_VSCROLL | ES_AUTOVSCROLL | LBS_NOTIFY 
-		| LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, 
+		LBS_NOTIFY | WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS |  WS_VISIBLE| WS_VSCROLL,
     x, y, w,  h, 
 	hwnd2, (HMENU) cmd, (HINSTANCE) GetWindowLong(hwnd2, GWL_HINSTANCE), NULL);
 
@@ -350,7 +550,7 @@ HWND CreateListBox(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd )
 	return NULL;
 }
 
-// кнопка
+// РєРЅРѕРїРєР° СЃ РєР°СЂС‚РёРЅРєРѕР№
 HWND CreateButIcon(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd, LPTSTR file, HWND *ptth)
 {
     HWND ww;
@@ -396,4 +596,150 @@ HWND CreateButIcon(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd, 
     return ww;
 }
 
+// РєРЅРѕРїРєР°
+HWND CreateBut(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd)
+{
+    HWND ww;
+
+    ww = CreateWindowEx(WS_EX_CONTROLPARENT, (LPCSTR)"BUTTON", (LPCSTR)name,
+    WS_VISIBLE | WS_CHILD | WS_TABSTOP, x, y, w, h, hwnd2, (HMENU) cmd,
+
+    (HINSTANCE) GetWindowLong(hwnd2, GWL_HINSTANCE),
+            NULL);
+
+	SendMessage(ww, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), MAKELPARAM(TRUE, 0));
+
+    return ww;
+}
+
+// РјРµС‚РєР°
+HWND CreateLabel(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name )
+{
+    HWND ww;
+
+    ww = CreateWindow( (LPCSTR)"STATIC", (LPCSTR)name, WS_VISIBLE | WS_CHILD | SS_RIGHT, x, y, w,  h, hwnd2, (HMENU) 99,
+    (HINSTANCE) GetWindowLong(hwnd2, GWL_HINSTANCE), NULL);
+
+	if (ww != NULL) 
+	{
+		HDC hdc = GetDC(ww);
+
+		HFONT fontTitle = CreateFont( (GetDeviceCaps(hdc, LOGPIXELSY) * 10) / 72,
+								0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, 0, (LPCSTR)"MS Sans Serif");
+
+		SendMessage( ww, WM_SETFONT, (WPARAM)fontTitle, TRUE );
+		ReleaseDC(ww, hdc );
+		
+		return ww; 
+	}
+
+	return NULL;
+}
+
+// С‚РµРєСЃС‚РѕРІРѕРµ РїРѕР»Рµ
+HWND CreateText(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd )
+{
+    HWND ww;
+
+    ww = CreateWindow( (LPCSTR)"EDIT", (LPCSTR)name, WS_VISIBLE | WS_CHILD | SS_SUNKEN | SS_LEFT | WS_BORDER,
+		x, y, w,  h, hwnd2, (HMENU) cmd, (HINSTANCE) GetWindowLong(hwnd2, GWL_HINSTANCE), NULL);
+
+	if (ww != NULL) 
+	{
+		HDC hdc = GetDC(ww);
+
+		HFONT fontTitle = CreateFont( (GetDeviceCaps(hdc, LOGPIXELSY) * 10) / 72,
+								0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, 0, (LPCSTR)"MS Sans Serif");
+
+		SendMessage( ww, WM_SETFONT, (WPARAM)fontTitle, TRUE );
+		ReleaseDC(ww, hdc );
+		
+		return ww; 
+	}
+	return NULL;
+}
+
+// РјРЅРѕРіРѕСЃС‚СЂРѕС‡РЅРѕРµ С‚РµРєСЃС‚РѕРІРѕРµ РїРѕР»Рµ
+HWND CreateMultiRowText(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT cmd )
+{
+    HWND ww;
+
+    ww = CreateWindow( (LPCSTR)"EDIT", (LPCSTR)name, WS_VISIBLE | WS_CHILD | SS_SUNKEN | SS_LEFT | 
+				WS_BORDER | ES_MULTILINE, x, y, w,  h, hwnd2, (HMENU) cmd, (HINSTANCE) GetWindowLong(hwnd2, GWL_HINSTANCE), NULL);
+
+	if (ww != NULL) 
+	{
+		HDC hdc = GetDC(ww);
+
+		HFONT fontTitle = CreateFont( (GetDeviceCaps(hdc, LOGPIXELSY) * 10) / 72,
+								0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, 0, (LPCSTR)"MS Sans Serif");
+
+		SendMessage( ww, WM_SETFONT, (WPARAM)fontTitle, TRUE );
+		ReleaseDC(ww, hdc );
+		
+		return ww; 
+	}
+
+	return NULL;
+}
 //---------------------------------------------------------------------------------------
+
+void setIcon(char *path){
+	HANDLE hIcon = LoadImage(0, path, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+	if (hIcon) {
+		//Change both icons to the same icon handle.
+		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+
+		//This will ensure that the application icon gets changed too.
+		//SendMessage(GetWindow(hwnd, GW_OWNER), WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+		//SendMessage(GetWindow(hwnd, GW_OWNER), WM_SETICON, ICON_BIG, hIcon);
+	}
+}
+
+void SelectAvatareFile(){
+
+	char *filename;//[MAX_PATH];             // Р±СѓС„РµСЂ РїРѕРґ РёРјСЏ С„Р°Р№Р»Р°
+	char *cur_dir;
+
+	filename = (char *)LocalAlloc(LPTR, MAX_PATH - 1);
+	if(filename == NULL){
+		return;
+	}
+
+	cur_dir = (char *)LocalAlloc(LPTR, MAX_PATH - 1);
+	if(cur_dir == NULL){
+
+		LocalFree(filename);
+		return;
+	}
+	ZeroMemory(filename, MAX_PATH - 1);
+	ZeroMemory(cur_dir, MAX_PATH - 1);
+	
+	OPENFILENAME of;
+	ZeroMemory(&of,sizeof(OPENFILENAME));
+	of.lStructSize			= sizeof(OPENFILENAME);
+	of.hwndOwner			= NULL;
+	of.lpstrFilter			= (LPCSTR)"Icon files(*.ico)\0*.ico";// С„РёР»СЊС‚СЂ С„Р°Р№Р»РѕРІ (С‚РёРї)
+	of.lpstrCustomFilter	= NULL;           
+	of.nMaxCustFilter		= 0;              
+	of.nFilterIndex			= 1;              //РєРѕР»РёС‡РµСЃС‚РІРѕ Р·Р°РґР°РЅРЅС‹С… С„РёР»СЊС‚СЂРѕРІ
+	of.lpstrFile			= (LPSTR)filename;       //Р°РґСЂРµСЃ Р±СѓС„РµСЂР° РїРѕРґ РёРјСЏ С„Р°Р№Р»Р°
+	of.lpstrFile[0]			= '\0';
+	of.nMaxFile				= MAX_PATH - 1;   //СЂР°Р·РјРµСЂ Р±СѓС„РµСЂР° РїРѕРґ РёРјСЏ С„Р°Р№Р»Р°
+	of.lpstrFileTitle		= NULL;           //Р±СѓС„РµСЂ РїРѕРґ СЂРµРєРѕРјРµРЅРґСѓРµРјС‹Р№ Р·Р°РіРѕР»РѕРІРѕРє: РЅР°Рј РЅРµ РЅР°РґРѕ
+	of.nMaxFileTitle		= 0;              //РЅР°Рј РЅРµ РЅР°РґРѕ
+	of.lpstrInitialDir		= NULL;			//СЃС‚Р°СЂС‚РѕРІС‹Р№ РєР°С‚Р°Р»РѕРі: С‚РµРєСѓС‰РёР№
+	of.Flags				= OFN_PATHMUSTEXIST|OFN_FILEMUSTEXIST;//СЂР°Р·РЅС‹Рµ С„Р»Р°РіРё
+
+	if (GetOpenFileName(&of)) {
+		SendMessage( hWnd_Avatare, WM_SETTEXT, 0, (LPARAM)( filename ) );
+		setIcon(filename);
+	}
+
+	LocalFree(filename);
+	LocalFree(cur_dir);
+}
+
+
+
