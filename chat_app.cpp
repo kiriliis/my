@@ -2,11 +2,25 @@
 #undef UNICODE // юникод не используем
 #endif
 
+#include <WinSock2.h>
+#include <ws2tcpip.h>
+
 #include <Windowsx.h>
 #include <windows.h>
+
+
+//#include <ws2tcpip.h>
+//#include <winsock.h>
+#include <iostream>
+
 #include <commctrl.h>
 #include <objbase.h>
 #include <stdio.h>
+
+// работа с сетью
+#pragma comment(lib, "ws2_32.lib")
+
+using namespace std; 
 
 // отключить некоторые предупреждения
 #pragma warning(disable : 4996)
@@ -49,8 +63,6 @@
 #define TXT_NIKE		1007
 #define TXT_AVATARE		1008
 
-
-
 #define TXT_MSG			1011
 
 #define BUT_WIDTH		40
@@ -69,6 +81,15 @@
 
 // файл настроек
 #define CONF_NAME		"res\\chat_app.ini"
+
+// -------------------------------------------------------------------------------
+// работа с сетью
+#define DEFAULT_PORT	1234
+#define DEFAULT_IP		"127.0.0.1"
+#define BUF_SIZE		4096
+#define NIKE_BUF_SIZE	BUF_SIZE/8
+#define D_CHAR			'@' 
+// ---------------------------------------------------------------------------------
 
 // настройки программы
 typedef struct tagAppSettings{
@@ -96,7 +117,7 @@ HWND hWnd_ButMsg;
 char	szClassName[]	= {CLASS_NAME};
 char	szWndName[]		= {STR_TITLE};
 pAPP_SETTINGS pcs	= NULL; // настройки программы
-char nike_buf[1024]; // ник пользователя
+char nike_buf[NIKE_BUF_SIZE]; // ник пользователя
 
 // определения функций
 BOOL InitMainWindow(HINSTANCE hInstance);
@@ -108,6 +129,7 @@ HWND CreateMultiRowText(HWND, INT, INT, INT, INT, PCHAR, INT);
 HWND CreateBut(HWND, INT, INT, INT, INT, PCHAR, INT);
 void DrawItem(HWND hWndParent, LPDRAWITEMSTRUCT lpDrawItem);
 void SelectAvatareFile();
+void NetRecv();
 
 //---------------------------  код для работы с файлом настроек программы ------------------------
 #define MAIN_WINDOW "главное окно"
@@ -202,8 +224,10 @@ int WINAPI WinMain (HINSTANCE hInstance,HINSTANCE hPrevInstance,char * szCmdLine
 {
 	MSG         msg ;
 
-	ZeroMemory(nike_buf, 1024);
+	ZeroMemory(nike_buf, NIKE_BUF_SIZE);
 	if(! InitMainWindow(hInstance) ) goto exit;
+
+	CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)NetRecv, (LPVOID)NULL, 0, NULL);
 
 	for(;;)
     {
@@ -263,12 +287,7 @@ void ResizeUI(HWND hwnd){
 						BUT_WIDTH, 
 						BUT_HEIGHT, 
 						SWP_DRAWFRAME);
-	
-
-
 }
-
-
 
 void DrawBitmaps(HDC hDC, RECT rect)
 {
@@ -294,7 +313,6 @@ void DrawBitmaps(HDC hDC, RECT rect)
     SelectObject(memdc,oldbitmap);
     SelectObject(memdc1,oldbitmap1);
 }
-
 
 BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
 	if (Item->itemID == -1){
@@ -331,13 +349,188 @@ BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
 
 // установка имени пользователя
 void SetNike(){
-	char buf[2048];	
+	char buf[NIKE_BUF_SIZE + 1];	
 
-	SendMessage(hWnd_Nike, WM_GETTEXT, (WPARAM)1023, (LPARAM)nike_buf);
+	SendMessage(hWnd_Nike, WM_GETTEXT, (WPARAM)NIKE_BUF_SIZE, (LPARAM)nike_buf);
 
 	sprintf(buf, "%s (%s)", STR_TITLE, nike_buf);
 
 	SendMessage(hwnd, WM_SETTEXT, 0, (LPARAM)buf);
+}
+
+// -------------------------------------------------------------------
+// защита сообщения
+
+// подсчет контрольной суммы сообщения
+// алгоритм простой
+int CalcSum(char *buf, int len){
+	int sum = 0;
+	int i;
+
+	for(i = 0; i < len; i ++){
+		sum += (int)buf[i];
+	}
+
+	return sum;
+}
+
+// запись контрольной суммы в сообщение
+int ProtectMessage(char *buf, int len){
+	int sum;
+	char tmp[BUF_SIZE];
+
+	sum = CalcSum(buf, len);
+	sprintf(tmp, "%d", sum);
+	if(lstrlen(tmp) + len + 2 > BUF_SIZE){
+		// слишком большое сообзение
+		// не защищаем его
+		return len;
+	}
+	int len_tmp = lstrlen(tmp);
+	tmp[len_tmp] = D_CHAR; // символ-разделитель контрольной суммы от сообщения 
+	len_tmp ++;
+
+	CopyMemory(&tmp[len_tmp], buf, len);
+	tmp[len + len_tmp] = '\x0';
+	sprintf(buf, "%s", tmp);
+
+	return len + len_tmp;
+}
+
+// Проверка целостности сообщения
+bool TestMessage(char *buf, int len){
+	bool b = true;
+	int pos = 0;
+	int i;
+	char tmp[16];
+	int sum1,sum2;
+
+	// ищется сивол разделитель
+	for(i = 0; i < len; i ++){
+		if(buf[i] == D_CHAR){
+			pos = i;
+			break;
+		}
+	}
+	// если найден
+	if(pos > 0 && pos < 15){
+		CopyMemory(tmp, buf, pos);
+		tmp[pos] = 0;
+	}
+	else{
+		return false;
+	}
+	// сумма из сообщения
+	sum1 = atoi(tmp);
+	if(sum1 <= 0){
+		return false;
+	}
+
+	// сумма расчетная
+	sum2 = CalcSum(&buf[pos+1], len-pos);
+
+	if(sum1 != sum2){
+		b = false;
+	}
+
+	char *tmp_buf = new char[len-pos+1];
+	if(tmp_buf != NULL){
+		CopyMemory(tmp_buf, &buf[pos+1], len-pos);
+		tmp_buf[len-pos] = '\x0';
+		sprintf(buf, "%s", tmp_buf);
+		delete [] tmp_buf;
+	}
+
+	return b;
+}
+// -------------------------------------------------------------------
+// прием сообщений
+void NetRecv(){
+	WSADATA wsaData;
+	SOCKET sock;                       
+    struct sockaddr_in broadcastAddr;  
+    unsigned short broadcastPort;     
+    char recvString[BUF_SIZE]; 
+    int recvStringLen;               
+
+    broadcastPort = DEFAULT_PORT;
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData); 
+    if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
+		return;
+	}
+	char broadcast = '1';
+	setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof broadcast);
+
+    memset(&broadcastAddr, 0, sizeof(broadcastAddr));
+
+	broadcastAddr.sin_family = AF_INET;
+    broadcastAddr.sin_port = htons(broadcastPort);
+    broadcastAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sock, (struct sockaddr *) &broadcastAddr, sizeof(broadcastAddr)) < 0){
+		return;
+	}
+
+	for(;;){
+		if ((recvStringLen = recvfrom(sock, recvString, BUF_SIZE - 1, 0, NULL, 0)) < 0){
+			break;
+		}
+
+		recvString[recvStringLen] = '\0';
+		bool b = TestMessage(recvString, recvStringLen);
+		recvStringLen = lstrlen(recvString);
+		if(! b){
+			char *str = "(???)";
+			if(recvStringLen < BUF_SIZE - 4){
+				CopyMemory( &recvString[recvStringLen], str, lstrlen(str) );
+				recvStringLen += lstrlen(str);
+				recvString[recvStringLen] = '\0';
+			}
+		}
+
+		SendMessage(hWnd_Messages, LB_INSERTSTRING, 0, (LPARAM)recvString);
+		Sleep(100);
+	}
+    closesocket(sock);
+
+	WSACleanup();
+}
+
+// отправка сообщений
+void NetSend(char *buf, int len){
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == INVALID_SOCKET)
+	{
+		perror("socket creation");
+		return;
+	}
+
+	BOOL enabled = TRUE;
+	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char*)&enabled, sizeof(BOOL)) < 0)
+	{
+		perror("broadcast options");
+		closesocket(sock);
+		return;
+	}
+
+	struct sockaddr_in Sender_addr;
+	Sender_addr.sin_family = AF_INET;
+	Sender_addr.sin_port = htons(DEFAULT_PORT);
+	Sender_addr.sin_addr.s_addr = inet_addr(DEFAULT_IP);
+
+	len = ProtectMessage(buf, len);
+
+	if (sendto(sock, buf, len, 0, (sockaddr *)&Sender_addr, sizeof(Sender_addr)) < 0)
+	{
+		perror("borhot send: ");
+	}
+
+	closesocket(sock);
+	WSACleanup();
 }
 
 // отправка сообщения
@@ -354,11 +547,8 @@ void SendTextMessage(){
 	buffer[pos] = ' ';
 	// получить текст сообщения в буфер
 	SendMessage(hWnd_Msg, WM_GETTEXT, (WPARAM)2047-pos-2, (LPARAM)&buffer[pos+1]);
-	// время прихода сообщения
-	// добавть текст в список сообщений
-	// это пока так работает, в дальнейшем сообщение будет отправляться в сеть
-	// и в список попадать из сети
-	SendMessage(hWnd_Messages, LB_INSERTSTRING, 0, (LPARAM)buffer);
+	// Отправляется сообщение в сеть
+	NetSend(buffer, lstrlen(buffer));
 }
 
 LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
@@ -416,6 +606,9 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		case WM_COMMAND :// обработчики команд
 			switch( LOWORD(wParam)) // если нажата какая-то кнопка
             {
+			case BUT_IN:
+				//CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)NetSend, (LPVOID)NULL, 0, NULL);
+				break;
 			case BUT_MSG: // кнопка отправить сообщение
 				SendTextMessage();
 				break;
