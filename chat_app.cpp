@@ -85,9 +85,9 @@ using namespace std;
 // -------------------------------------------------------------------------------
 // работа с сетью
 #define DEFAULT_PORT	1234
-#define DEFAULT_IP		"127.0.0.1"
-#define BUF_SIZE		4096
-#define NIKE_BUF_SIZE	BUF_SIZE/8
+#define DEFAULT_IP		"255.255.255.255"
+#define BUF_SIZE		1024*20
+#define NIKE_BUF_SIZE	256
 #define D_CHAR			'@' 
 // ---------------------------------------------------------------------------------
 
@@ -130,6 +130,9 @@ HWND CreateBut(HWND, INT, INT, INT, INT, PCHAR, INT);
 void DrawItem(HWND hWndParent, LPDRAWITEMSTRUCT lpDrawItem);
 void SelectAvatareFile();
 void NetRecv();
+
+DWORD GetBitmapPixels(HBITMAP, BYTE*, int);
+HBITMAP GetBmpFromRaw(unsigned char *);
 
 //---------------------------  код для работы с файлом настроек программы ------------------------
 #define MAIN_WINDOW "главное окно"
@@ -289,32 +292,121 @@ void ResizeUI(HWND hwnd){
 						SWP_DRAWFRAME);
 }
 
-void DrawBitmaps(HDC hDC, RECT rect)
+HBITMAP BitmapFromIcon(HICON hIcon)
 {
+	HBITMAP hBitmap;
+	ICONINFO iconinfo;
+	GetIconInfo(hIcon, &iconinfo);
+	hBitmap = iconinfo.hbmColor;//SetBitmapBits 
 
-    HDC memdc, memdc1;
-    memdc=CreateCompatibleDC(hDC);
-    memdc1=CreateCompatibleDC(hDC);
+	return hBitmap;
+} 
+// добавляет пользователя в список
+void AddItem(HWND hwnd, PTSTR pstr, HBITMAP hbmp) 
+{ 
+	int item = SendMessage ( hwnd, LB_FINDSTRING,(WPARAM)0, (LPARAM)pstr );
 
-    HBITMAP bitmap,bitmap1, oldbitmap, oldbitmap1;
+	if(item == LB_ERR){
+		int lbItem = SendMessage(hwnd, LB_ADDSTRING, 0, (LPARAM)pstr); 
+		SendMessage(hwnd, LB_SETITEMDATA, (WPARAM)lbItem, (LPARAM)hbmp); 
+		SendMessage(hwnd, LB_SETCURSEL, (WPARAM)lbItem, (LPARAM)NULL); 
+	}
+} 
 
-//    bitmap=LoadBitmap(AfxGetInstanceHandle(),MAKEINTRESOURCE(IDB_REDX));
-//    bitmap1=LoadBitmap(AfxGetInstanceHandle(),MAKEINTRESOURCE(IDB_REDXMASK));
+// удаляет пользователя из списка
+void DeleteUserItem(char *nike_buf){
 
-    oldbitmap=(HBITMAP)SelectObject(memdc,bitmap);
-    oldbitmap1=(HBITMAP)SelectObject(memdc1,bitmap1);
+	int item = SendMessage ( hWnd_Users, LB_FINDSTRING,(WPARAM)0, (LPARAM)nike_buf );
 
-    //draw the bitmap
-    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc,0,0,SRCINVERT);
-    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc1,0,0,SRCAND);
-    BitBlt(hDC,rect.left+2,rect.top+2,16,16,memdc,0,0,SRCINVERT);
-
-    //cleanup
-    SelectObject(memdc,oldbitmap);
-    SelectObject(memdc1,oldbitmap1);
+	if(item != LB_ERR){
+		SendMessage ( hWnd_Users, LB_DELETESTRING,(WPARAM)(item), (LPARAM)NULL );
+	}
 }
 
-BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
+HICON GetIcon(char *file_buf){
+	HICON hicon = (HICON) LoadImage(NULL, file_buf, IMAGE_ICON, 0, 0, LR_LOADFROMFILE| LR_DEFAULTSIZE | LR_SHARED);
+	return hicon;
+}
+// работа со списком пользователей
+void AddUserItem(char *str, int len){
+
+	int pos = 0;
+	char ch;
+	// ищется символ-разделитель
+	while(str[pos] != '\x0' && pos < len){
+		if(str[pos] == '#' || str[pos] == '!') break;
+		pos ++;
+	}
+	// добавлять или удалять
+	if(str[pos] != '#' && str[pos] != '!') return;
+	ch = str[pos];
+	str[pos] = '\x0';
+	pos ++;
+	if(ch == '!'){ // удалять
+		DeleteUserItem(str);
+		return;
+	}
+	
+	// добавлять
+	HBITMAP hbmp_new = GetBmpFromRaw((unsigned char *)&str[pos]);
+
+	AddItem(hWnd_Users, str, hbmp_new);
+}
+
+#define XBITMAP 32 
+#define YBITMAP 32 
+
+// прорисовка строки в списке пользователей
+BOOL DrawUserItem(PDRAWITEMSTRUCT pdis){
+
+	 HDC hdcMem; 
+    TCHAR achBuffer[1024];
+    size_t cch;
+    int yPos; 
+    TEXTMETRIC tm; 
+    RECT rcBitmap;
+
+	ZeroMemory(achBuffer, 1024);
+		HBITMAP hbmpPicture = (HBITMAP)SendMessage(pdis->hwndItem, LB_GETITEMDATA, pdis->itemID, 0); 
+  
+        hdcMem = CreateCompatibleDC(pdis->hDC); 
+
+        HBITMAP hbmpOld = (HBITMAP) SelectObject(hdcMem, hbmpPicture); 
+ 
+        BitBlt(pdis->hDC, 
+            pdis->rcItem.left, pdis->rcItem.top, 
+            pdis->rcItem.right - pdis->rcItem.left, 
+            pdis->rcItem.bottom - pdis->rcItem.top, 
+            hdcMem, 0, 0, SRCCOPY); 
+ 
+        SendMessage(pdis->hwndItem, LB_GETTEXT, pdis->itemID, (LPARAM)achBuffer); 
+ 
+        GetTextMetrics(pdis->hDC, &tm); 
+
+        yPos = (pdis->rcItem.bottom + pdis->rcItem.top - tm.tmHeight) / 2;
+                        
+		cch = lstrlen(achBuffer)*5;
+ 
+        TextOut(pdis->hDC, XBITMAP + 6, yPos, achBuffer, cch);                         
+
+        SelectObject(hdcMem, hbmpOld); 
+        DeleteDC(hdcMem); 
+ 
+        if (pdis->itemState & ODS_SELECTED) 
+        { 
+            rcBitmap.left = pdis->rcItem.left; 
+            rcBitmap.top = pdis->rcItem.top; 
+            rcBitmap.right = pdis->rcItem.left + XBITMAP; 
+            rcBitmap.bottom = pdis->rcItem.top + YBITMAP; 
+ 
+            DrawFocusRect(pdis->hDC, &rcBitmap); 
+        } 
+
+		return true;
+}
+
+// прорисовка строки в списке сообщений
+BOOL DrawMsgItem(LPDRAWITEMSTRUCT Item){
 	if (Item->itemID == -1){
 		return FALSE;
 	}
@@ -324,8 +416,7 @@ BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
 	SetBkColor(Item->hDC, 0xFFFFFF);
     FillRect(Item->hDC, &Item->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
     SetTextColor(Item->hDC, 0x000000);
-    //if (Item->itemState == ODS_SELECTED)
-        
+            
     int len = SendMessage(Item->hwndItem , LB_GETTEXTLEN, Item->itemID, 0);
     if (len > 0)
     {
@@ -334,10 +425,7 @@ BOOL DrawUserItem(LPDRAWITEMSTRUCT Item){
         if (len > 0)
             TextOut(Item->hDC, Item->rcItem.left, Item->rcItem.top, lpBuff, len);
         delete[] lpBuff;
-    }
-    
-	//draw the bitmap
-    //DrawBitmaps(dc, Item->rcItem);
+    }    
 
     if (Item->itemState & ODS_FOCUS)
     {
@@ -392,7 +480,9 @@ int ProtectMessage(char *buf, int len){
 
 	CopyMemory(&tmp[len_tmp], buf, len);
 	tmp[len + len_tmp] = '\x0';
-	sprintf(buf, "%s", tmp);
+	//sprintf(buf, "%s", tmp);
+	CopyMemory(buf, tmp, len+len_tmp);
+	buf[len+len_tmp] = '\x0';
 
 	return len + len_tmp;
 }
@@ -479,8 +569,9 @@ void NetRecv(){
 
 		recvString[recvStringLen] = '\0';
 		bool b = TestMessage(recvString, recvStringLen);
-		recvStringLen = lstrlen(recvString);
+		
 		if(! b){
+			recvStringLen = lstrlen(recvString);
 			char *str = "(???)";
 			if(recvStringLen < BUF_SIZE - 4){
 				CopyMemory( &recvString[recvStringLen], str, lstrlen(str) );
@@ -489,7 +580,13 @@ void NetRecv(){
 			}
 		}
 
-		SendMessage(hWnd_Messages, LB_INSERTSTRING, 0, (LPARAM)recvString);
+		if(recvString[0] == '$'){ // текстовое сообщение
+			SendMessage(hWnd_Messages, LB_INSERTSTRING, 0, (LPARAM)&recvString[1]);
+		}
+		if(recvString[0] == '&'){ // текстовое сообщение
+			AddUserItem(&recvString[1], recvStringLen-1);
+		}
+		
 		Sleep(100);
 	}
     closesocket(sock);
@@ -542,13 +639,53 @@ void SendTextMessage(){
 	ZeroMemory(buffer, 2048);
 
 	GetLocalTime(&st);
-	sprintf(buffer, "[%02d.%02d.%04d_%02d:%02d:%02d] (%s)", st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, nike_buf);
+	sprintf(buffer, "$[%02d.%02d.%04d_%02d:%02d:%02d] (%s)", st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, nike_buf);
 	pos = lstrlen(buffer);
 	buffer[pos] = ' ';
 	// получить текст сообщения в буфер
 	SendMessage(hWnd_Msg, WM_GETTEXT, (WPARAM)2047-pos-2, (LPARAM)&buffer[pos+1]);
 	// Отправляется сообщение в сеть
 	NetSend(buffer, lstrlen(buffer));
+}
+// отправляет данные пользователя
+void SendUserMessage(char ch){
+	int pos = 0;
+	char buffer[2048*10]; // буфер для сообщения
+	ZeroMemory(buffer, 2048*10);
+
+	// получить имя и иконку
+	char *file_buf;
+	HICON hIcon;
+	
+	file_buf = new char[MAX_PATH+1];
+	if(file_buf == NULL) return;
+
+	SendMessage(hWnd_Avatare, WM_GETTEXT, (WPARAM)MAX_PATH, (LPARAM)file_buf);
+
+	hIcon = GetIcon(file_buf);
+
+	HBITMAP hbmp = BitmapFromIcon(hIcon);
+
+	BYTE *buf = new BYTE[1024*10];
+	DWORD sz = GetBitmapPixels(hbmp, buf, 1024*10);
+
+	buffer[pos] = '&';
+	pos ++;
+
+	SendMessage(hWnd_Nike, WM_GETTEXT, (WPARAM)MAX_PATH, (LPARAM)&buffer[pos]);
+
+	pos = lstrlen(buffer);
+	buffer[pos] = ch;
+	pos ++;
+	CopyMemory(&buffer[pos], buf, sz);
+	pos += sz;
+
+	// Отправляется сообщение в сеть
+	//NetSend(buffer, lstrlen(buffer));
+	NetSend(buffer, pos);
+
+	delete [] file_buf;
+	delete [] buf;
 }
 
 LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
@@ -607,7 +744,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 			switch( LOWORD(wParam)) // если нажата какая-то кнопка
             {
 			case BUT_IN:
-				//CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)NetSend, (LPVOID)NULL, 0, NULL);
+				//AddUserItem(nike_buf);
+				SendUserMessage('#'); // добавить пользователя
+				break;
+			case BUT_OUT:
+				//DeleteUserItem(nike_buf);
+				SendUserMessage('!'); // удалить пользователя
 				break;
 			case BUT_MSG: // кнопка отправить сообщение
 				SendTextMessage();
@@ -631,6 +773,10 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		case WM_DRAWITEM: // прорисовка строки списка
 			Item = (LPDRAWITEMSTRUCT)lParam;
             if (Item->CtlID == LIST_MSGS) // есои список сообщений
+            {
+                DrawMsgItem(Item);
+            }
+			else if (Item->CtlID == LIST_USERS) // есои список пользователей
             {
                 DrawUserItem(Item);
             }
@@ -876,23 +1022,97 @@ HWND CreateMultiRowText(HWND hwnd2, INT x, INT y, INT w, INT h, PCHAR name, INT 
 	return NULL;
 }
 //---------------------------------------------------------------------------------------
+// иконки должны быть 32 битовые
+HBITMAP GetBmpFromRaw(unsigned char *buf_raw){
+
+	HBITMAP hBmp_New = NULL;
+	BITMAP new_bmp;
+	char *buf = (char *)buf_raw;
+	int bitPerPicsel = 32;
+	int width = 32; 
+	int height = 32;
+
+	new_bmp.bmBits = buf;
+	new_bmp.bmWidth = width;
+	new_bmp.bmHeight = height;
+	new_bmp.bmPlanes = 1;
+	new_bmp.bmType = 0;
+	new_bmp.bmBitsPixel = bitPerPicsel;
+
+	hBmp_New = CreateBitmap(new_bmp.bmWidth, new_bmp.bmHeight, new_bmp.bmPlanes, new_bmp.bmBitsPixel, new_bmp.bmBits);
+
+	return hBmp_New;
+}
+
+// получение пикселей из bitmap для пересылки по сети
+DWORD GetBitmapPixels(HBITMAP hBitmap,   BYTE* buf, int sz){
+	DWORD ColorSize,DataSize; 
+	BITMAP BM;
+	WORD BitCount;
+	LPBITMAPINFO LPBMI;
+	LPBYTE Buf;
+
+	GetObject((HBITMAP)hBitmap, sizeof(BITMAP), (LPSTR)&BM);
+
+	BitCount = BM.bmBitsPixel;
+	
+	switch (BitCount){
+	   case 1:
+	   case 4:
+	   case 8: 
+	   case 32:ColorSize = sizeof(RGBQUAD) * (1 << BitCount);break; 
+	   case 16:
+	   case 24:ColorSize = 0; 
+	   default:
+		   return 0;
+	}
+
+	DataSize = ((BM.bmWidth*BitCount+31) & ~31)/8*BM.bmHeight;
+
+	LPBMI =(LPBITMAPINFO)LocalAlloc( LPTR, sizeof(BITMAPINFOHEADER)+ColorSize);
+	if( LPBMI == NULL ){
+		return 0;
+	}
+	ZeroMemory(LPBMI, sizeof(BITMAPINFOHEADER)+ColorSize);
+	LPBMI->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	LPBMI->bmiHeader.biWidth = BM.bmWidth;
+	LPBMI->bmiHeader.biHeight = BM.bmHeight;
+	LPBMI->bmiHeader.biPlanes = 1;
+	LPBMI->bmiHeader.biBitCount = BitCount;
+	LPBMI->bmiHeader.biCompression = 0 ;
+	LPBMI->bmiHeader.biSizeImage = DataSize;
+	LPBMI->bmiHeader.biXPelsPerMeter = 0;
+	LPBMI->bmiHeader.biYPelsPerMeter = 0;
+	if (BitCount < 16) LPBMI->bmiHeader.biClrUsed = (1<<BitCount);
+	LPBMI->bmiHeader.biClrImportant = 0;
+ 
+	Buf = (LPBYTE)GlobalAlloc(GMEM_FIXED, DataSize);
+	HDC hDC = GetDC(0); 
+	if(! GetDIBits(hDC, (HBITMAP)hBitmap, 0,(WORD)BM.bmHeight, Buf, LPBMI, DIB_RGB_COLORS)){
+		GlobalFree((HGLOBAL)Buf);
+		return 0;
+	}
+	ReleaseDC(0, hDC);
+  
+	CopyMemory(buf, Buf, DataSize);
+
+	GlobalFree((HGLOBAL)Buf); 
+	LocalFree( LPBMI );
+
+	return DataSize;
+}
 
 void setIcon(char *path){
 	HANDLE hIcon = LoadImage(0, path, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
 	if (hIcon) {
-		//Change both icons to the same icon handle.
 		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
 		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-
-		//This will ensure that the application icon gets changed too.
-		//SendMessage(GetWindow(hwnd, GW_OWNER), WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-		//SendMessage(GetWindow(hwnd, GW_OWNER), WM_SETICON, ICON_BIG, hIcon);
 	}
 }
 
 void SelectAvatareFile(){
 
-	char *filename;//[MAX_PATH];             // буфер под имя файла
+	char *filename; // буфер под имя файла
 	char *cur_dir;
 
 	filename = (char *)LocalAlloc(LPTR, MAX_PATH - 1);
